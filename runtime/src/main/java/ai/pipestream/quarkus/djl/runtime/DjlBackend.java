@@ -2,6 +2,8 @@ package ai.pipestream.quarkus.djl.runtime;
 
 import ai.pipestream.module.embedder.spi.EmbeddingBackend;
 import inference.MutinyGRPCInferenceServiceGrpc;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.quarkus.grpc.GrpcClient;
 import io.smallrye.mutiny.Uni;
 import jakarta.inject.Inject;
@@ -63,11 +65,24 @@ public class DjlBackend implements EmbeddingBackend {
         if (servingName == null || servingName.isBlank()) {
             return Uni.createFrom().item(Boolean.FALSE);
         }
+        // Honest probe: only "this specific model isn't served" signals
+        // (gRPC NOT_FOUND / UNIMPLEMENTED) resolve to false. Every other
+        // error (UNAVAILABLE, DEADLINE_EXCEEDED, INTERNAL, UNAUTHENTICATED,
+        // PERMISSION_DENIED, plain RuntimeException, etc.) propagates so
+        // the router, ops, and metrics see the real failure instead of a
+        // silent "backend doesn't support this model" that leaves a sick
+        // backend silently disabled forever.
         return clientUni(servingName)
                 .map(c -> Boolean.TRUE)
-                .onFailure().invoke(err ->
-                        log.warn("DJL supports() probe failed for '{}': {}", servingName, err.getMessage()))
-                .onFailure().recoverWithItem(Boolean.FALSE);
+                .onFailure(StatusRuntimeException.class).recoverWithUni(err -> {
+                    StatusRuntimeException sre = (StatusRuntimeException) err;
+                    Status.Code code = sre.getStatus().getCode();
+                    if (code == Status.Code.NOT_FOUND || code == Status.Code.UNIMPLEMENTED) {
+                        log.info("DJL Serving does not serve '{}': {}", servingName, sre.getStatus());
+                        return Uni.createFrom().item(Boolean.FALSE);
+                    }
+                    return Uni.createFrom().failure(err);
+                });
     }
 
     @Override
