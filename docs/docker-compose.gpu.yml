@@ -1,0 +1,27 @@
+# GPU variant - use: docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+# Requires nvidia-docker / NVIDIA Container Toolkit
+
+services:
+  djl-serving:
+    image: ${DJL_IMAGE:-deepjavalibrary/djl-serving:0.36.0-pytorch-gpu}
+    environment:
+      # Bumped from 600 to 1200 to tolerate the bge-m3 download (~2.3 GB from HuggingFace)
+      - MODEL_LOADING_TIMEOUT=1200
+      # Bumped from -Xmx8g to -Xmx16g for the 5-model setup — JVM heap holds request
+      # buffers and per-model metadata; PyTorch tensor data lives in native memory
+      # outside the JVM. The host also needs enough RAM + VRAM to hold 5 models
+      # (minilm/e5-small/mpnet/e5-large/bge-m3 ≈ 12 GB VRAM fp32). If bge-m3 won't
+      # load on a 16 GB GPU (it usually doesn't), skip it and document the failure —
+      # that's itself a data point for the OVMS-vs-DJL comparison.
+      - JAVA_OPTS=-Xmx16g -Xms2g -XX:+ExitOnOutOfMemoryError
+      # Optimizations for GPU
+      - OPTION_ROLLING_BATCH=disable
+      - OPTION_TENSOR_PARALLEL_DEGREE=1
+      - OMP_NUM_THREADS=4
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

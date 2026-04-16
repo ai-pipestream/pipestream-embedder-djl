@@ -1,0 +1,16 @@
+# DJL Serving for module-embedder
+# Port 8090 matches embedder default: EMBEDDER_DJL_SERVING_URL
+# Model: all-MiniLM-L6-v2 (384d, loaded via management API)
+#
+# CPU:  docker compose up -d
+# GPU:  DJL_IMAGE=deepjavalibrary/djl-serving:0.36.0-pytorch-gpu docker compose -f docker-compose.gpu.yml up -d
+# ARM:  DJL_IMAGE=deepjavalibrary/djl-serving:0.36.0-aarch64 docker compose up -d
+
+services:
+  djl-serving:
+    image: ${DJL_IMAGE:-deepjavalibrary/djl-serving:0.36.0-cpu}
+    ports:
+      - "8090:8080"
+    environment:
+      - MODEL_LOADING_TIMEOUT=300
+      - JAVA_OPTS=-Xmx4g -Xms1g -XX:+ExitOnOutOfMemoryError
