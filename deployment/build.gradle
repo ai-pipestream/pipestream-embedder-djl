@@ -1,0 +1,110 @@
+import org.gradle.plugins.signing.Sign
+
+plugins {
+    id 'java-library'
+    alias(libs.plugins.maven.publish)
+    id 'signing'
+    alias(libs.plugins.nmcp.single)
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+    withJavadocJar()
+    withSourcesJar()
+}
+
+description = 'Quarkus DJL Serving Embeddings Extension - Deployment'
+
+def pipestreamBomVersion = findProperty('pipestreamBomVersion')
+
+dependencies {
+    implementation platform(libs.quarkus.bom)
+
+    implementation project(':runtime')
+
+    implementation 'io.quarkus:quarkus-arc-deployment'
+    implementation 'io.quarkus:quarkus-core-deployment'
+
+    implementation "ai.pipestream.module:module-embedder-api-deployment:${findProperty('embedderApiVersion') ?: pipestreamBomVersion}"
+
+    annotationProcessor platform(libs.quarkus.bom)
+    annotationProcessor 'io.quarkus:quarkus-extension-processor'
+}
+
+tasks.withType(Javadoc).configureEach { task ->
+    task.options.addStringOption('Xdoclint:-missing', '-quiet')
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+            pom {
+                name.set('Quarkus DJL Serving Embeddings Extension - Deployment')
+                description.set('Quarkus extension deployment module for DJL Serving Model Server embedding support')
+                url.set('https://github.com/ai-pipestream/pipestream-embedder-djl')
+
+                licenses {
+                    license {
+                        name.set('MIT License')
+                        url.set('https://opensource.org/license/mit')
+                    }
+                }
+
+                developers {
+                    developer {
+                        id.set('krickert')
+                        name.set('Pipestream Engine Team')
+                    }
+                }
+
+                scm {
+                    connection.set('scm:git:git://github.com/ai-pipestream/pipestream-embedder-djl.git')
+                    developerConnection.set('scm:git:ssh://github.com/ai-pipestream/pipestream-embedder-djl.git')
+                    url.set('https://github.com/ai-pipestream/pipestream-embedder-djl')
+                }
+            }
+        }
+    }
+
+    repositories {
+        mavenLocal()
+
+        if (System.getenv("GITHUB_ACTOR") != null) {
+            maven {
+                name = "GitHubPackages"
+                url = uri("https://maven.pkg.github.com/ai-pipestream/pipestream-embedder-djl")
+                credentials {
+                    username = System.getenv("GITHUB_ACTOR")
+                    password = System.getenv("GITHUB_TOKEN")
+                }
+            }
+        }
+    }
+}
+
+signing {
+    def signingKey = System.getenv("GPG_PRIVATE_KEY")
+    def signingPassword = System.getenv("GPG_PASSPHRASE")
+
+    if (signingKey && signingPassword) {
+        useInMemoryPgpKeys(signingKey, signingPassword)
+        sign publishing.publications.maven
+    }
+}
+
+afterEvaluate {
+    tasks.matching { it.name.startsWith("nmcpZipAllPublications") || it.name.startsWith("nmcpPublishAllPublicationsToCentralPortal") }
+        .configureEach { nmcpTask ->
+            nmcpTask.dependsOn(tasks.withType(Sign))
+        }
+}
+
+nmcp {
+    publishAllPublicationsToCentralPortal {
+        username = providers.environmentVariable("MAVEN_CENTRAL_USERNAME")
+        password = providers.environmentVariable("MAVEN_CENTRAL_PASSWORD")
+        publishingType = "AUTOMATIC"
+    }
+}
