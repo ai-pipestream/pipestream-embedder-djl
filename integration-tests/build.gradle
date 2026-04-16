@@ -14,6 +14,14 @@ dependencies {
 
     testImplementation project(':runtime')
 
+    // The IT directly references DjlBackend which implements EmbeddingBackend
+    // (from module-embedder-api). Runtime pulls api with implementation scope
+    // so the transitive classpath doesn't expose EmbeddingBackend to compile-
+    // time test sources — re-declare it here.
+    def pipestreamBomVersion = findProperty('pipestreamBomVersion')
+    def embedderApi = findProperty('embedderApiVersion') ?: pipestreamBomVersion
+    testImplementation "ai.pipestream.module:module-embedder-api:${embedderApi}"
+
     testImplementation 'io.smallrye.reactive:mutiny'
     testImplementation 'org.slf4j:slf4j-api'
 

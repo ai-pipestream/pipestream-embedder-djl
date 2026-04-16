@@ -19,13 +19,16 @@ import java.util.concurrent.ConcurrentHashMap;
  * Stork service discovery, TLS, deadlines, and interceptors all
  * configurable via {@code quarkus.grpc.clients.djl.*} keys.
  *
- * <p><b>Fully reactive.</b> Every gRPC call on the hot path returns a
- * {@link Uni} — no {@code .await()}, no blocking stubs, no
- * {@code Uni.createFrom().item(() -> syncBlock)} wrappers (the older
- * REST-based DJL client had that pattern and it was a footgun: the
- * enclosed code ran on the subscriber thread, which under Vert.x
- * event-loop execution serialised "concurrent" calls into sequential
- * blocking work).
+ * <p><b>Reactive contract (honest version).</b> Every method on
+ * {@link EmbeddingBackend} that does I/O returns a {@link Uni}. There
+ * is no {@code .await()}, no blocking stub, no
+ * {@code Uni.createFrom().item(() -> syncBlock)} wrapper anywhere on
+ * the hot path. {@link #supports(String)} runs the real probe
+ * reactively by chaining {@link DjlModelDescriptor#discover} →
+ * {@code map(c -> true)} with errors surfaced via {@code .invoke(log)}
+ * and recovered to {@code false} — callers get a truthful probe
+ * result, not an optimistic {@code true} with the actual probe fired
+ * into the void.
  *
  * <p>Marked {@link Singleton} (not {@code @ApplicationScoped}) so ARC
  * does not generate a client proxy — required because
@@ -56,14 +59,15 @@ public class DjlBackend implements EmbeddingBackend {
     }
 
     @Override
-    public boolean supports(String servingName) {
+    public Uni<Boolean> supports(String servingName) {
         if (servingName == null || servingName.isBlank()) {
-            return false;
+            return Uni.createFrom().item(Boolean.FALSE);
         }
-        clientUni(servingName).subscribe().with(
-                c -> {},
-                err -> log.debug("DJL probe failed for '{}': {}", servingName, err.getMessage()));
-        return true;
+        return clientUni(servingName)
+                .map(c -> Boolean.TRUE)
+                .onFailure().invoke(err ->
+                        log.warn("DJL supports() probe failed for '{}': {}", servingName, err.getMessage()))
+                .onFailure().recoverWithItem(Boolean.FALSE);
     }
 
     @Override
