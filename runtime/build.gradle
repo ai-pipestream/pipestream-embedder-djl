@@ -1,7 +1,6 @@
 plugins {
     alias(libs.plugins.java.library)
     alias(libs.plugins.quarkus.extension)
-    alias(libs.plugins.proto.toolchain)
     alias(libs.plugins.maven.publish)
     id 'signing'
 }
@@ -21,33 +20,16 @@ quarkusExtension {
     deploymentModule = 'deployment'
 }
 
-// Proto configuration - fetch KServe V2 Protocol from KServe repository
-pipestreamProtos {
-    sourceMode = 'git'
-    generateMutiny = true
-
-    modules {
-        register("kserve-v2") {
-            gitRepo = "https://github.com/kserve/kserve.git"
-            gitRef = "master"
-            gitSubdir = "docs/predict-api/v2"
-        }
-    }
-}
-
 dependencies {
     implementation platform(libs.quarkus.bom)
 
     implementation 'io.quarkus:quarkus-core'
     implementation 'io.quarkus:quarkus-arc'
     implementation 'io.quarkus:quarkus-mutiny'
-    implementation 'io.quarkus:quarkus-grpc'
     implementation 'io.quarkus:quarkus-rest-client'
     implementation 'io.quarkus:quarkus-rest-client-jackson'
-
-    implementation libs.grpc.stub
-    implementation libs.grpc.protobuf
-    implementation libs.protobuf.java
+    implementation 'io.quarkus:quarkus-scheduler'
+    implementation 'io.quarkus:quarkus-smallrye-health'
 
     implementation "ai.pipestream.module:module-embedder-api:${findProperty('embedderApiVersion') ?: pipestreamBomVersion}"
 
@@ -77,7 +59,7 @@ publishing {
             from components.java
             pom {
                 name.set('Quarkus DJL Serving Embeddings Extension - Runtime')
-                description.set('Quarkus extension providing DJL Serving Model Server embedding support via KServe v2 gRPC')
+                description.set('Quarkus extension providing DJL Serving embedding support via HTTP REST')
                 url.set('https://github.com/ai-pipestream/pipestream-embedder-djl')
 
                 licenses {
