@@ -1,6 +1,8 @@
 package ai.pipestream.quarkus.djl.deployment;
 
-import ai.pipestream.quarkus.djl.runtime.DjlBackend;
+import ai.pipestream.quarkus.djl.runtime.DjlModelRegistry;
+import ai.pipestream.quarkus.djl.runtime.DjlServingBackend;
+import ai.pipestream.quarkus.djl.runtime.DjlServingReadinessCheck;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
@@ -9,17 +11,18 @@ import io.quarkus.deployment.builditem.IndexDependencyBuildItem;
 /**
  * Build-time configuration for the DJL Serving Embeddings extension.
  *
- * <p>Registers {@link DjlBackend} as an ARC-managed {@code @Singleton}
- * and indexes the {@code module-embedder-api} jar so ARC's bean-graph
- * builder sees the {@code EmbeddingBackend} interface at build time.
- * The gRPC transport is handled entirely by Quarkus's
- * {@code @GrpcClient} infrastructure — Stork, TLS, interceptors,
- * deadlines all configured via {@code quarkus.grpc.clients.djl.*}
- * config keys.
+ * <p>Registers {@link DjlServingBackend}, {@link DjlModelRegistry} and
+ * {@link DjlServingReadinessCheck} as ARC beans, and indexes the
+ * {@code module-embedder-api} jar so ARC's bean-graph builder can see
+ * the {@code EmbeddingBackend} interface at build time.
+ *
+ * <p>The REST client ({@code DjlServingClient}) is picked up automatically
+ * by the {@code quarkus-rest-client} extension via
+ * {@code @RegisterRestClient} — no explicit build step needed.
  */
 public class DjlProcessor {
 
-    private static final String FEATURE = "djl-embeddings";
+    private static final String FEATURE = "djl-serving-embeddings";
 
     @BuildStep
     FeatureBuildItem feature() {
@@ -34,7 +37,9 @@ public class DjlProcessor {
     @BuildStep
     AdditionalBeanBuildItem beans() {
         return AdditionalBeanBuildItem.builder()
-                .addBeanClass(DjlBackend.class)
+                .addBeanClass(DjlServingBackend.class)
+                .addBeanClass(DjlModelRegistry.class)
+                .addBeanClass(DjlServingReadinessCheck.class)
                 .setUnremovable()
                 .build();
     }
