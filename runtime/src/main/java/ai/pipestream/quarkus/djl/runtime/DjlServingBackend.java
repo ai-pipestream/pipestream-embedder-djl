@@ -7,8 +7,6 @@ import io.vertx.core.json.JsonObject;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -42,8 +40,6 @@ import java.util.List;
 @Singleton
 public class DjlServingBackend implements EmbeddingBackend {
 
-    private static final Logger log = LoggerFactory.getLogger(DjlServingBackend.class);
-
     @Inject
     @RestClient
     DjlServingClient client;
@@ -70,13 +66,12 @@ public class DjlServingBackend implements EmbeddingBackend {
             return List.of();
         }
         JsonObject body = new JsonObject().put("inputs", new JsonArray(texts));
-        try {
-            JsonArray response = client.predict(servingName, body);
-            return parseBatch(response);
-        } catch (Exception e) {
-            log.error("DJL Serving predict failed for '{}': {}", servingName, e.getMessage());
-            throw e;
-        }
+        // Quarkus REST Client throws WebApplicationException for HTTP errors (4xx/5xx)
+        // and ProcessingException for connection-level failures (refused, timeout, TLS).
+        // Both are RuntimeException subclasses; let them propagate so the router /
+        // retry policy can classify them and decide failover vs retry.
+        JsonArray response = client.predict(servingName, body);
+        return parseBatch(response);
     }
 
     /**
