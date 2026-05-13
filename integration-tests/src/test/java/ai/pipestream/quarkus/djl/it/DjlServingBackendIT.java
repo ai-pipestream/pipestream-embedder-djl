@@ -1,7 +1,6 @@
 package ai.pipestream.quarkus.djl.it;
 
 import ai.pipestream.quarkus.djl.runtime.client.DjlServingClient;
-import io.smallrye.mutiny.Uni;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import org.eclipse.microprofile.rest.client.RestClientBuilder;
@@ -118,14 +117,14 @@ class DjlServingBackendIT {
     @Test
     @DisplayName("/ping returns healthy response")
     void pingReturnsHealthy() {
-        String pong = client.ping().await().atMost(TIMEOUT);
+        String pong = client.ping();
         assertThat(pong).isNotNull();
     }
 
     @Test
     @DisplayName("/models lists the loaded MiniLM model")
     void listModelsIncludesLoadedModel() {
-        JsonObject response = client.listModels().await().atMost(TIMEOUT);
+        JsonObject response = client.listModels();
         JsonArray models = response.getJsonArray("models");
 
         assertThat(models).as("/models response should contain a 'models' array").isNotNull();
@@ -147,8 +146,7 @@ class DjlServingBackendIT {
         JsonObject body = new JsonObject().put("inputs",
                 new JsonArray(List.of("hello world", "another sentence", "a third")));
 
-        Uni<JsonArray> call = client.predict(MODEL_NAME, body);
-        JsonArray response = call.await().atMost(TIMEOUT);
+        JsonArray response = client.predict(MODEL_NAME, body);
 
         assertThat(response).hasSize(3);
         for (int i = 0; i < response.size(); i++) {
