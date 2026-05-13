@@ -2,7 +2,6 @@ package ai.pipestream.quarkus.djl.runtime;
 
 import ai.pipestream.module.embedder.spi.EmbeddingBackend;
 import ai.pipestream.quarkus.djl.runtime.client.DjlServingClient;
-import io.smallrye.mutiny.Uni;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import jakarta.inject.Inject;
@@ -23,6 +22,11 @@ import java.util.List;
  * {@code module-embedder-api} jar, and client proxies can't cast across
  * the extension classloader boundary when discovered via
  * {@code Instance<EmbeddingBackend>}.
+ *
+ * <p><b>Concurrency model.</b> Plain blocking REST calls. The SPI is
+ * synchronous; callers (e.g. {@code EmbedderGrpcImpl}) are expected to
+ * invoke from a {@code @RunOnVirtualThread} entry point so the carrier
+ * is parked on the HTTP wait rather than burning a platform thread.
  *
  * <p>Model name resolution (HuggingFace identifier → short name → DJL
  * serving name) is the caller's responsibility. {@link #supports(String)}
@@ -53,23 +57,26 @@ public class DjlServingBackend implements EmbeddingBackend {
     }
 
     @Override
-    public Uni<Boolean> supports(String servingName) {
+    public boolean supports(String servingName) {
         if (servingName == null || servingName.isBlank()) {
-            return Uni.createFrom().item(Boolean.FALSE);
+            return false;
         }
-        return Uni.createFrom().item(() -> modelRegistry.isModelReady(servingName));
+        return modelRegistry.isModelReady(servingName);
     }
 
     @Override
-    public Uni<List<float[]>> embed(String servingName, List<String> texts) {
+    public List<float[]> embed(String servingName, List<String> texts) {
         if (texts == null || texts.isEmpty()) {
-            return Uni.createFrom().item(List.of());
+            return List.of();
         }
         JsonObject body = new JsonObject().put("inputs", new JsonArray(texts));
-        return client.predict(servingName, body)
-                .map(DjlServingBackend::parseBatch)
-                .onFailure().invoke(e ->
-                        log.error("DJL Serving predict failed for '{}': {}", servingName, e.getMessage()));
+        try {
+            JsonArray response = client.predict(servingName, body);
+            return parseBatch(response);
+        } catch (Exception e) {
+            log.error("DJL Serving predict failed for '{}': {}", servingName, e.getMessage());
+            throw e;
+        }
     }
 
     /**

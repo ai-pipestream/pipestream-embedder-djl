@@ -109,7 +109,7 @@ public class DjlModelRegistry {
 
         try {
             DjlServingClient client = clientInstance.get();
-            JsonObject response = client.listModels().await().atMost(config.requestTimeout());
+            JsonObject response = client.listModels();
 
             JsonArray modelArray = response.getJsonArray("models");
             if (modelArray == null || modelArray.isEmpty()) {
@@ -182,7 +182,7 @@ public class DjlModelRegistry {
                                         String status, String modelUrl) {
         try {
             JsonObject input = new JsonObject().put("inputs", PROBE_TEXT);
-            JsonArray result = client.predict(name, input).await().atMost(config.requestTimeout());
+            JsonArray result = client.predict(name, input);
 
             if (result == null || result.isEmpty()) {
                 return new ModelStatus(name, status, modelUrl, Instant.now(),
